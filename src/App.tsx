@@ -293,7 +293,7 @@ export default function App() {
           {!left && !right ? <Empty /> : identical ? <div className="flex items-center justify-center gap-2 p-6 text-sm font-medium text-[var(--add-text)]">✓ Files are identical</div> : <DiffView diff={diff} ctx={ctxLines} wrap={opts.wrap} view={viewMode} leftRaw={left} rightRaw={right} />}
         </div>
       </main>
-      <footer className="flex h-8 shrink-0 items-center justify-center border-t border-borderx bg-surface text-[11px] tracking-wide text-mutedx2">Made with ❤️ by <span className="text-mutedx">&nbsp;Rohit</span></footer>
+      <footer className="flex h-8 shrink-0 items-center justify-center border-t border-borderx bg-surface text-[11px] tracking-wide text-mutedx2">Made with ❤️ by <span className="text-mutedx">&nbsp;Rohit Rambade</span></footer>
       <input ref={fileInputRef} type="file" hidden onChange={(event) => { loadFile(event.target.files?.[0]); event.currentTarget.value = '' }} />
       <div className={cn('pointer-events-none fixed bottom-5 left-1/2 z-50 -translate-x-1/2 translate-y-12 rounded-lg bg-textx px-5 py-2 text-xs font-medium text-bg transition-transform', toast && 'translate-y-0')}>{toast}</div>
     </div>
