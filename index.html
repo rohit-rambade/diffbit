@@ -2,23 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#f9f9f8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)" />
+    <meta name="robots" content="index, follow" />
+    <!--app-head-->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <meta name="description" content="Diffbit - A fast, modern, and beautiful text, code, and JSON diff tool. Compare your code side-by-side with ease." />
-    <meta name="keywords" content="diff tool, text comparison, code diff, json diff, compare text, side-by-side diff" />
-    <meta property="og:title" content="Diffbit - Modern Code & Text Comparison" />
-    <meta property="og:description" content="A fast, modern, and beautiful text, code, and JSON diff tool. Compare your code side-by-side with ease." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Diffbit - Modern Code & Text Comparison" />
-    <meta name="twitter:description" content="A fast, modern, and beautiful text, code, and JSON diff tool. Compare your code side-by-side with ease." />
-    <title>Diffbit - Modern Code & Text Comparison Tool</title>
+    <script>
+      try {
+        var t = localStorage.getItem('diff-theme')
+        if (t === 'dark' || (!t && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><!--app-body--></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
