@@ -214,11 +214,65 @@ export function validateJson(text: string): ValidationError | null {
   }
 }
 
+const looksLikeJson = (s: string) => /^\s*[{[]/.test(s)
+
+function tryParse(src: string): Node | null {
+  try {
+    return parse(src)
+  } catch {
+    return null
+  }
+}
+
+/** Decode a JSON string literal, or the body of one without its surrounding quotes. */
+function decodeString(src: string): string | null {
+  try {
+    const v = JSON.parse(src.startsWith('"') ? src : `"${src.replace(/\r?\n/g, '\\n').replace(/\t/g, '\\t')}"`)
+    return typeof v === 'string' ? v : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Turns stringified JSON into real JSON:
+ *  - "{\"a\":1}"  (a JSON string holding JSON, e.g. copied from a log)
+ *  - {\"a\":1}    (escaped JSON without the surrounding quotes)
+ * Applied repeatedly for double-escaped input. Returns null if nothing applies.
+ */
+function unwrapStringified(src: string): Node | null {
+  let current = src
+  for (let depth = 0; depth < 5; depth++) {
+    const isLiteral = current.startsWith('"')
+    if (!isLiteral && !(looksLikeJson(current) && current.includes('\\"'))) return null
+    const decoded = decodeString(current)?.trim()
+    if (!decoded || (!looksLikeJson(decoded) && !decoded.startsWith('"'))) return null
+    const node = tryParse(decoded)
+    if (node && node.t !== 'lit') return node
+    current = decoded
+  }
+  return null
+}
+
+/** Replace string values that contain JSON objects/arrays with the parsed structure. */
+function expandNested(node: Node, depth = 0): Node {
+  if (depth > 20) return node
+  if (node.t === 'obj') return { t: 'obj', entries: node.entries.map(([k, v]) => [k, expandNested(v, depth + 1)]) }
+  if (node.t === 'arr') return { t: 'arr', items: node.items.map((v) => expandNested(v, depth + 1)) }
+  if (!node.raw.startsWith('"') || node.raw.length < 4) return node
+  const decoded = decodeString(node.raw)
+  if (!decoded || !looksLikeJson(decoded)) return node
+  const inner = tryParse(decoded.trim()) ?? unwrapStringified(decoded.trim())
+  return inner ? expandNested(inner, depth + 1) : node
+}
+
 export function formatJson(text: string, indent: string, sortKeys = false): FormatResult {
   const src = text.trim()
   if (!src) return { output: '', error: null }
+  const unwrapped = unwrapStringified(src)
+  if (unwrapped) return { output: print(expandNested(unwrapped), indent, sortKeys), error: null }
   try {
-    return { output: print(parse(src), indent, sortKeys), error: null }
+    return { output: print(expandNested(parse(src)), indent, sortKeys), error: null }
   } catch (e) {
     const err = e as ParseError
     return {
