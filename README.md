@@ -1,14 +1,17 @@
 # diffbit
 
-Fast, private JSON & XML diff checker with a built-in beautifier. Everything runs in the browser.
+Fast, private diff checker for JSON, XML, SQL and plain text, with a built-in beautifier. Everything runs in the browser.
 
 - **Beautify / minify / validate** JSON and XML (exact line + column errors, click to jump)
 - **Auto-format on paste** and on file open / drag-and-drop
 - **Semantic compare** – "Ignore formatting" beautifies both sides first; "Sort keys" ignores JSON key order
 - Split & unified views, word-level change highlights, collapse unchanged lines, jump between changes
-- Lossless JSON formatting (big numbers and key order preserved)
+- Lossless JSON formatting (big numbers and key order preserved); stringified JSON is expanded
+- SQL beautifier for stored procedures and scripts (BEGIN/END, TRY/CATCH, CTEs, sub-queries); ignore case / whitespace
+- Plain-text mode for any file
+- Changed lines are paired by similarity, so edits line up even when lines are inserted around them
 
-Routes: `/` (JSON diff) and `/xml-diff` (XML diff). Each is pre-rendered at build time with its own
+Routes: `/` (JSON), `/xml-diff`, `/sql-diff` and `/text-diff`. Each is pre-rendered at build time with its own
 title, description, canonical URL and JSON-LD; `sitemap.xml` and `robots.txt` are generated too.
 SEO copy lives in `src/seo.ts` – set `SITE_URL` there if you use a custom domain.
 

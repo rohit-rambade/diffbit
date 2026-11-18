@@ -6,7 +6,7 @@
 export const SITE_URL = 'https://diffbit.vercel.app'
 export const SITE_NAME = 'diffbit'
 
-export type PageKey = 'json' | 'xml'
+export type PageKey = 'json' | 'xml' | 'sql' | 'text'
 
 export type PageMeta = {
   path: string
@@ -73,6 +73,60 @@ export const PAGES: Record<PageKey, PageMeta> = {
       },
     ],
   },
+  sql: {
+    path: '/sql-diff',
+    title: 'SQL Diff Checker – Compare SQL Scripts & Stored Procedures Online | diffbit',
+    description:
+      'Compare two SQL scripts or stored procedures side by side and see every changed line and word. Beautify T-SQL, PL/SQL, MySQL and PostgreSQL. Free, fast and private – runs entirely in your browser.',
+    keywords: 'sql diff, sql compare, compare sql online, stored procedure compare, sql diff checker, t-sql diff, sql formatter, sql beautifier',
+    h1: 'SQL Diff Checker',
+    intro: 'Paste or drop two SQL scripts – stored procedures, views, migrations – to compare them side by side. Ignore case and whitespace, or beautify both sides to compare by structure.',
+    faq: [
+      {
+        q: 'How do I compare two stored procedures?',
+        a: 'Paste the original procedure on the left and the modified one on the right, or drop the .sql files onto each editor. Changed lines and words are highlighted instantly, and you can jump between changes.',
+      },
+      {
+        q: 'Can it ignore formatting and keyword case?',
+        a: 'Yes. "Ignore case" treats SELECT and select as equal, "Ignore whitespace" skips spacing changes, and "Ignore formatting" beautifies both scripts before comparing.',
+      },
+      {
+        q: 'Which SQL dialects are supported?',
+        a: 'Highlighting and formatting work with T-SQL (SQL Server), PL/SQL (Oracle), MySQL and PostgreSQL, including BEGIN/END blocks, TRY/CATCH, CTEs and sub-queries.',
+      },
+      {
+        q: 'Is my SQL uploaded anywhere?',
+        a: 'No. Everything runs locally in your browser, so scripts and procedures never leave your device.',
+      },
+    ],
+  },
+  text: {
+    path: '/text-diff',
+    title: 'Text Diff Checker – Compare Two Texts or Files Online | diffbit',
+    description:
+      'Compare two texts or files side by side and see exactly what changed, line by line and word by word. Ignore whitespace and case. Free, fast and private – runs entirely in your browser.',
+    keywords: 'text diff, text compare, compare text online, diff checker, compare files, file diff, online diff tool',
+    h1: 'Text Diff Checker',
+    intro: 'Paste or drop any two texts or files – logs, configs, CSV, code, documents – to see what changed line by line, with changed words highlighted.',
+    faq: [
+      {
+        q: 'How do I compare two text files?',
+        a: 'Paste the original text on the left and the changed text on the right, or drop a file onto each editor. Differences appear instantly below.',
+      },
+      {
+        q: 'Can it ignore whitespace or case?',
+        a: 'Yes. Turn on "Ignore whitespace" to skip spacing and indentation changes, and "Ignore case" to treat upper and lower case as equal.',
+      },
+      {
+        q: 'How large can the files be?',
+        a: 'Files with tens of thousands of lines compare in well under a second. Unchanged sections are collapsed so you can focus on what changed.',
+      },
+      {
+        q: 'Is my text uploaded anywhere?',
+        a: 'No. The comparison runs locally in your browser. Your text never leaves your device.',
+      },
+    ],
+  },
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -122,12 +176,12 @@ export function renderHead(key: PageKey) {
 /** Static fallback rendered inside #root so crawlers without JS still see real content. React replaces it on load. */
 export function renderBody(key: PageKey) {
   const p = PAGES[key]
-  const other: PageKey = key === 'json' ? 'xml' : 'json'
+  const others = (Object.keys(PAGES) as PageKey[]).filter((k) => k !== key)
   return `<main style="max-width:720px;margin:48px auto;padding:0 16px;font-family:system-ui,sans-serif">
       <h1>${esc(p.h1)}</h1>
       <p>${esc(p.intro)}</p>
       ${p.faq.map((f) => `<h2>${esc(f.q)}</h2><p>${esc(f.a)}</p>`).join('\n      ')}
-      <p><a href="${PAGES[other].path}">${esc(PAGES[other].h1)}</a></p>
+      <p>${others.map((k) => `<a href="${PAGES[k].path}">${esc(PAGES[k].h1)}</a>`).join(' · ')}</p>
     </main>`
 }
 

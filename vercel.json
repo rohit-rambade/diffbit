@@ -5,10 +5,14 @@
   "redirects": [
     { "source": "/json-diff", "destination": "/", "permanent": true },
     { "source": "/xml", "destination": "/xml-diff", "permanent": true },
-    { "source": "/json", "destination": "/", "permanent": true }
+    { "source": "/json", "destination": "/", "permanent": true },
+    { "source": "/sql", "destination": "/sql-diff", "permanent": true },
+    { "source": "/text", "destination": "/text-diff", "permanent": true }
   ],
   "rewrites": [
-    { "source": "/xml-diff", "destination": "/xml-diff/index.html" }
+    { "source": "/xml-diff", "destination": "/xml-diff/index.html" },
+    { "source": "/sql-diff", "destination": "/sql-diff/index.html" },
+    { "source": "/text-diff", "destination": "/text-diff/index.html" }
   ],
   "headers": [
     {

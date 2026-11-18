@@ -91,10 +91,14 @@ export type Row =
 export type DiffResult = { rows: Row[]; adds: number; dels: number; chgs: number }
 
 /** Line diff. Runs of deletions followed by additions are paired up as "changed" lines. */
-export function diffLines(left: string, right: string, ignoreWhitespace = false): DiffResult {
+export function diffLines(left: string, right: string, ignoreWhitespace = false, ignoreCase = false): DiffResult {
   const a = left.split('\n')
   const b = right.split('\n')
-  const [ia, ib] = toIds(a, b, ignoreWhitespace ? (s) => s.replace(/\s+/g, '') : (s) => s)
+  const key = (s: string) => {
+    const k = ignoreWhitespace ? s.replace(/\s+/g, '') : s
+    return ignoreCase ? k.toLowerCase() : k
+  }
+  const [ia, ib] = toIds(a, b, key)
   const ops = myers(ia, ib)
   const rows: Row[] = []
   let i = 0
@@ -115,17 +119,92 @@ export function diffLines(left: string, right: string, ignoreWhitespace = false)
       else j++
       k++
     }
-    const nd = i - delStart
-    const na = j - addStart
-    const paired = Math.min(nd, na)
-    for (let p = 0; p < paired; p++) rows.push({ t: 'chg', l: a[delStart + p], r: b[addStart + p], ln: delStart + p + 1, rn: addStart + p + 1 })
-    for (let p = paired; p < nd; p++) rows.push({ t: 'del', l: a[delStart + p], ln: delStart + p + 1 })
-    for (let p = paired; p < na; p++) rows.push({ t: 'add', r: b[addStart + p], rn: addStart + p + 1 })
-    chgs += paired
-    dels += nd - paired
-    adds += na - paired
+    for (const op of alignBlock(a.slice(delStart, i), b.slice(addStart, j), key)) {
+      if (op.t === 'chg') {
+        rows.push({ t: 'chg', l: a[delStart + op.i], r: b[addStart + op.j], ln: delStart + op.i + 1, rn: addStart + op.j + 1 })
+        chgs++
+      } else if (op.t === 'del') {
+        rows.push({ t: 'del', l: a[delStart + op.i], ln: delStart + op.i + 1 })
+        dels++
+      } else {
+        rows.push({ t: 'add', r: b[addStart + op.j], rn: addStart + op.j + 1 })
+        adds++
+      }
+    }
   }
   return { rows, adds, dels, chgs }
+}
+
+type BlockOp = { t: 'chg'; i: number; j: number } | { t: 'del'; i: number } | { t: 'add'; j: number }
+
+const WORD_RE = /[\p{L}\p{N}_]+|[^\p{L}\p{N}_\s]/gu
+
+/** Dice similarity of two lines' word multisets (0..1). */
+function similarity(x: string[], y: string[]) {
+  if (!x.length && !y.length) return 1
+  if (!x.length || !y.length) return 0
+  const counts = new Map<string, number>()
+  for (const w of x) counts.set(w, (counts.get(w) ?? 0) + 1)
+  let common = 0
+  for (const w of y) {
+    const c = counts.get(w)
+    if (c) {
+      common++
+      counts.set(w, c - 1)
+    }
+  }
+  return (2 * common) / (x.length + y.length)
+}
+
+const MIN_SIMILARITY = 0.4
+
+/**
+ * Pairs deleted and added lines inside one change block by similarity, so a
+ * modified line is compared with its real counterpart even when lines were
+ * inserted or removed around it. Order is preserved on both sides.
+ */
+function alignBlock(dels: string[], adds: string[], key: (s: string) => string): BlockOp[] {
+  const nd = dels.length
+  const na = adds.length
+  const out: BlockOp[] = []
+  if (!nd || !na || nd * na > 40_000) {
+    // Nothing to pair, or too large to align cheaply: pair by position.
+    const paired = Math.min(nd, na)
+    for (let p = 0; p < paired; p++) out.push({ t: 'chg', i: p, j: p })
+    for (let p = paired; p < nd; p++) out.push({ t: 'del', i: p })
+    for (let p = paired; p < na; p++) out.push({ t: 'add', j: p })
+    return out
+  }
+  const words = (s: string) => key(s).match(WORD_RE) ?? []
+  const dw = dels.map(words)
+  const aw = adds.map(words)
+  // score[x][y]: best total similarity aligning dels[0..x) with adds[0..y)
+  const w = na + 1
+  const score = new Float64Array((nd + 1) * w)
+  const sim = new Float64Array(nd * na)
+  for (let x = 1; x <= nd; x++) {
+    for (let y = 1; y <= na; y++) {
+      const s = similarity(dw[x - 1], aw[y - 1])
+      sim[(x - 1) * na + (y - 1)] = s
+      const pair = s >= MIN_SIMILARITY ? score[(x - 1) * w + (y - 1)] + s : -1
+      score[x * w + y] = Math.max(score[(x - 1) * w + y], score[x * w + (y - 1)], pair)
+    }
+  }
+  let x = nd
+  let y = na
+  while (x > 0 || y > 0) {
+    if (x > 0 && y > 0) {
+      const s = sim[(x - 1) * na + (y - 1)]
+      if (s >= MIN_SIMILARITY && score[x * w + y] === score[(x - 1) * w + (y - 1)] + s) {
+        out.push({ t: 'chg', i: --x, j: --y })
+        continue
+      }
+    }
+    // Emit additions after deletions at the same position (reads naturally: - then +).
+    if (y > 0 && (x === 0 || score[x * w + (y - 1)] >= score[(x - 1) * w + y])) out.push({ t: 'add', j: --y })
+    else out.push({ t: 'del', i: --x })
+  }
+  return out.reverse()
 }
 
 /** Split syntax tokens into word-level pieces so intra-line highlights are precise. */

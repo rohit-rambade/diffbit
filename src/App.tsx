@@ -4,26 +4,28 @@ import { ArrowLeftRight, ChevronDown, ChevronUp, Copy, Moon, Sun } from 'lucide-
 import { CodeEditor } from '@/components/CodeEditor'
 import { DiffView, type ViewMode } from '@/components/DiffView'
 import { diffLines, toPatch } from '@/lib/diff'
-import { formatJson, validateJson } from '@/lib/json'
-import { formatXml, validateXml } from '@/lib/xml'
+import { formatLang as format, LANG_ORDER, LANGS, validateLang as validate } from '@/lib/langs'
 import { SAMPLES } from '@/lib/samples'
 import type { Lang } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { PAGES, pageUrl } from '@/seo'
 
 type Indent = '2' | '4' | 'tab'
-type Prefs = { indent: Indent; view: ViewMode; wrap: boolean; collapse: boolean; normalize: boolean; sortKeys: boolean; ignoreWs: boolean }
+type Prefs = { indent: Indent; view: ViewMode; wrap: boolean; collapse: boolean; normalize: Record<Lang, boolean>; sortKeys: boolean; ignoreWs: boolean; ignoreCase: boolean }
 
-const DEFAULT_PREFS: Prefs = { indent: '2', view: 'split', wrap: true, collapse: true, normalize: true, sortKeys: false, ignoreWs: false }
+const DEFAULT_NORMALIZE = Object.fromEntries(LANG_ORDER.map((l) => [l, LANGS[l].normalizeByDefault])) as Record<Lang, boolean>
+const DEFAULT_PREFS: Prefs = { indent: '2', view: 'split', wrap: true, collapse: true, normalize: DEFAULT_NORMALIZE, sortKeys: false, ignoreWs: false, ignoreCase: false }
 const INDENTS: Record<Indent, string> = { '2': '  ', '4': '    ', tab: '\t' }
 
-const langFromPath = (path: string): Lang => (path.startsWith(PAGES.xml.path) ? 'xml' : 'json')
-const format = (lang: Lang, text: string, indent: string, sortKeys = false) => (lang === 'json' ? formatJson(text, indent, sortKeys) : formatXml(text, indent))
-const validate = (lang: Lang, text: string) => (lang === 'json' ? validateJson(text) : validateXml(text))
+const langFromPath = (path: string): Lang => LANG_ORDER.find((l) => PAGES[l].path !== '/' && path.startsWith(PAGES[l].path)) ?? 'json'
+const EMPTY_DOCS = Object.fromEntries(LANG_ORDER.map((l) => [l, ['', '']])) as Record<Lang, [string, string]>
 
 function loadPrefs(): Prefs {
   try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem('diffbit-prefs') ?? '{}') }
+    const saved = JSON.parse(localStorage.getItem('diffbit-prefs') ?? '{}')
+    // Older versions stored a single boolean for "Ignore formatting".
+    const normalize = typeof saved.normalize === 'object' && saved.normalize ? { ...DEFAULT_NORMALIZE, ...saved.normalize } : DEFAULT_NORMALIZE
+    return { ...DEFAULT_PREFS, ...saved, normalize }
   } catch {
     return DEFAULT_PREFS
   }
@@ -31,7 +33,7 @@ function loadPrefs(): Prefs {
 
 export default function App() {
   const [lang, setLang] = useState<Lang>(() => langFromPath(location.pathname))
-  const [docs, setDocs] = useState<Record<Lang, [string, string]>>({ json: ['', ''], xml: ['', ''] })
+  const [docs, setDocs] = useState<Record<Lang, [string, string]>>(EMPTY_DOCS)
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs)
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
   const [toast, setToast] = useState('')
@@ -39,6 +41,9 @@ export default function App() {
   const diffRef = useRef<HTMLDivElement>(null)
 
   const [left, right] = docs[lang]
+  const info = LANGS[lang]
+  const normalize = info.formats && prefs.normalize[lang]
+  const ignoreCase = info.caseOption && prefs.ignoreCase
   const indent = INDENTS[prefs.indent]
   const setPref = <K extends keyof Prefs>(key: K, value: Prefs[K]) => setPrefs((p) => ({ ...p, [key]: value }))
   const setSide = useCallback((side: 0 | 1, value: string) => setDocs((d) => ({ ...d, [lang]: side === 0 ? [value, d[lang][1]] : [d[lang][0], value] })), [lang])
@@ -89,9 +94,9 @@ export default function App() {
 
   const result = useMemo(() => {
     if (!dLeft.trim() || !dRight.trim()) return null
-    const prep = (s: string) => (prefs.normalize ? format(lang, s, indent, lang === 'json' && prefs.sortKeys).output : s.replace(/\r\n?/g, '\n'))
-    return diffLines(prep(dLeft), prep(dRight), prefs.ignoreWs)
-  }, [dLeft, dRight, lang, indent, prefs.normalize, prefs.sortKeys, prefs.ignoreWs])
+    const prep = (s: string) => (normalize ? format(lang, s, indent, lang === 'json' && prefs.sortKeys).output : s.replace(/\r\n?/g, '\n'))
+    return diffLines(prep(dLeft), prep(dRight), prefs.ignoreWs, ignoreCase)
+  }, [dLeft, dRight, lang, indent, normalize, prefs.sortKeys, prefs.ignoreWs, ignoreCase])
 
 
   // Reset change-navigation position whenever the diff changes.
@@ -116,7 +121,7 @@ export default function App() {
 
   const formatOnPaste = useCallback(
     (text: string) => {
-      if (!text.trim()) return null
+      if (!text.trim() || !LANGS[lang].formatOnPaste) return null
       const r = format(lang, text, indent)
       if (r.error) notify(`Formatted, but input has errors: ${r.error.message}`)
       return r.output
@@ -126,7 +131,8 @@ export default function App() {
 
   const loadSample = () => {
     const [a, b] = SAMPLES[lang]
-    setDocs((d) => ({ ...d, [lang]: [format(lang, a, indent).output, format(lang, b, indent).output] }))
+    const prep = (s: string) => (info.formatOnPaste ? format(lang, s, indent).output : s)
+    setDocs((d) => ({ ...d, [lang]: [prep(a), prep(b)] }))
     track('sample', { lang })
   }
 
@@ -156,7 +162,8 @@ export default function App() {
   const page = PAGES[lang]
   const changes = result ? result.adds + result.dels + result.chgs : 0
   const blocks = useMemo(() => (result ? result.rows.filter((r, i) => r.t !== 'eq' && (i === 0 || result.rows[i - 1].t === 'eq')).length : 0), [result])
-  const label = lang.toUpperCase()
+  const label = lang === 'text' ? 'text' : info.label
+  const tagline = lang === 'text' ? 'Compare any two texts or files line by line' : lang === 'sql' ? 'Compare and beautify SQL scripts and stored procedures' : `Beautify, validate and compare ${label}`
 
   return (
     <div className="min-h-screen bg-bg text-textx">
@@ -167,7 +174,7 @@ export default function App() {
             diffbit
           </a>
           <nav className="flex rounded-lg border border-borderx bg-surface p-0.5" aria-label="Format">
-            {(['json', 'xml'] as Lang[]).map((l) => (
+            {LANG_ORDER.map((l) => (
               <a
                 key={l}
                 href={PAGES[l].path}
@@ -176,9 +183,9 @@ export default function App() {
                   switchLang(l)
                 }}
                 aria-current={lang === l ? 'page' : undefined}
-                className={cn('rounded-md px-3.5 py-1 text-xs font-medium text-mutedx transition hover:text-textx', lang === l && 'bg-textx text-bg hover:text-bg')}
+                className={cn('rounded-md px-2.5 py-1 text-xs font-medium sm:px-3.5 text-mutedx transition hover:text-textx', lang === l && 'bg-textx text-bg hover:text-bg')}
               >
-                {l.toUpperCase()}
+                {LANGS[l].label}
               </a>
             ))}
           </nav>
@@ -192,10 +199,10 @@ export default function App() {
         <div className="flex flex-wrap items-end justify-between gap-3 pb-4 pt-6">
           <div>
             <h1 className="text-lg font-semibold tracking-tight">{page.h1}</h1>
-            <p className="mt-0.5 text-[13px] text-mutedx">Beautify, validate and compare {label} — everything stays in your browser.</p>
+            <p className="mt-0.5 text-[13px] text-mutedx">{tagline} — everything stays in your browser.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Segmented label="Indent" value={prefs.indent} onChange={(v) => setPref('indent', v)} options={[['2', '2'], ['4', '4'], ['tab', 'Tab']]} />
+            {info.formats && <Segmented label="Indent" value={prefs.indent} onChange={(v) => setPref('indent', v)} options={[['2', '2'], ['4', '4'], ['tab', 'Tab']]} />}
             <Btn onClick={() => setDocs((d) => ({ ...d, [lang]: [d[lang][1], d[lang][0]] }))} title="Swap original and modified">
               <ArrowLeftRight size={13} /> Swap
             </Btn>
@@ -247,17 +254,24 @@ export default function App() {
               )}
             </div>
             <div className="ml-auto flex flex-wrap items-center gap-1.5">
-              <Toggle on={prefs.normalize} onClick={() => setPref('normalize', !prefs.normalize)} title="Beautify both sides before comparing">
-                Ignore formatting
-              </Toggle>
+              {info.formats && (
+                <Toggle on={normalize} onClick={() => setPref('normalize', { ...prefs.normalize, [lang]: !normalize })} title="Beautify both sides before comparing">
+                  Ignore formatting
+                </Toggle>
+              )}
               {lang === 'json' && (
-                <Toggle on={prefs.sortKeys} onClick={() => setPref('sortKeys', !prefs.sortKeys)} title="Sort object keys before comparing" disabled={!prefs.normalize}>
+                <Toggle on={prefs.sortKeys} onClick={() => setPref('sortKeys', !prefs.sortKeys)} title="Sort object keys before comparing" disabled={!normalize}>
                   Sort keys
                 </Toggle>
               )}
               <Toggle on={prefs.ignoreWs} onClick={() => setPref('ignoreWs', !prefs.ignoreWs)}>
                 Ignore whitespace
               </Toggle>
+              {info.caseOption && (
+                <Toggle on={prefs.ignoreCase} onClick={() => setPref('ignoreCase', !prefs.ignoreCase)}>
+                  Ignore case
+                </Toggle>
+              )}
               <Toggle on={prefs.collapse} onClick={() => setPref('collapse', !prefs.collapse)}>
                 Collapse unchanged
               </Toggle>
@@ -283,7 +297,7 @@ export default function App() {
               )}
             </div>
           ) : changes === 0 ? (
-            <p className="px-6 py-16 text-center text-[13px] font-medium text-[var(--add-text)]">✓ No differences{prefs.normalize ? ' — documents are equivalent after formatting' : ''}</p>
+            <p className="px-6 py-16 text-center text-[13px] font-medium text-[var(--add-text)]">✓ No differences{normalize ? ' — documents are equivalent after formatting' : ''}</p>
           ) : (
             <DiffView key={`${lang}-${prefs.view}`} rows={result.rows} lang={lang} view={prefs.view} wrap={prefs.wrap} collapse={prefs.collapse} />
           )}
@@ -303,14 +317,14 @@ export default function App() {
       </main>
 
       <footer className="border-t border-borderx py-6 text-center text-[11px] text-mutedx">
-        <a href={PAGES.json.path} className="hover:text-textx">
-          JSON Diff
-        </a>
-        <span className="mx-2 text-mutedx2">·</span>
-        <a href={PAGES.xml.path} className="hover:text-textx">
-          XML Diff
-        </a>
-        <span className="mx-2 text-mutedx2">·</span>
+        {LANG_ORDER.map((l) => (
+          <span key={l}>
+            <a href={PAGES[l].path} className="hover:text-textx">
+              {LANGS[l].label} Diff
+            </a>
+            <span className="mx-2 text-mutedx2">·</span>
+          </span>
+        ))}
         Made by Rohit Rambade
       </footer>
 

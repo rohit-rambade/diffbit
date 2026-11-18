@@ -1,4 +1,4 @@
-export type Lang = 'json' | 'xml'
+export type Lang = 'json' | 'xml' | 'sql' | 'text'
 
 export type Token = { text: string; cls: string; mark?: boolean }
 
