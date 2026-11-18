@@ -15,7 +15,7 @@ type Props = {
   error: ValidationError | null
   onFormat: () => void
   onMinify: () => void
-  /** Returns formatted text for a paste into an empty editor, or null to paste as-is. */
+  /** Returns the formatted document after a paste or file load, or null to leave the text as-is. */
   formatOnPaste: (text: string) => string | null
   onNotify: (msg: string) => void
 }
@@ -137,9 +137,9 @@ export function CodeEditor({ lang, label, value, onChange, error, onFormat, onMi
           onScroll={syncScroll}
           onPaste={(e) => {
             const ta = e.currentTarget
-            const replacingAll = !value.trim() || (ta.selectionStart === 0 && ta.selectionEnd === value.length)
-            if (!replacingAll) return
-            const formatted = formatOnPaste(e.clipboardData.getData('text'))
+            // Insert the pasted text at the cursor, then format the whole document.
+            const combined = value.slice(0, ta.selectionStart) + e.clipboardData.getData('text') + value.slice(ta.selectionEnd)
+            const formatted = formatOnPaste(combined)
             if (formatted === null) return
             e.preventDefault()
             onChange(formatted)

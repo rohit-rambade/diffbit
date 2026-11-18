@@ -116,10 +116,12 @@ export default function App() {
 
   const formatOnPaste = useCallback(
     (text: string) => {
+      if (!text.trim()) return null
       const r = format(lang, text, indent)
-      return r.error ? null : r.output
+      if (r.error) notify(`Formatted, but input has errors: ${r.error.message}`)
+      return r.output
     },
-    [lang, indent],
+    [lang, indent, notify],
   )
 
   const loadSample = () => {
