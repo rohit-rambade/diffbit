@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronsUpDown } from 'lucide-react'
 import { intraLine, type Row } from '@/lib/diff'
-import { tokenize } from '@/lib/highlight'
+import { tokenize } from '@/lib/langs'
 import type { Lang, Token } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Tokens } from './Tokens'

@@ -7,7 +7,8 @@ import { PAGES, renderBody, renderHead, renderRobots, renderSitemap, type PageKe
 const HEAD = '<!--app-head-->'
 const BODY = '<!--app-body-->'
 const fill = (html: string, key: PageKey) => html.replace(HEAD, renderHead(key)).replace(BODY, renderBody(key))
-const pageFor = (url = '/'): PageKey => (url.startsWith(PAGES.xml.path) ? 'xml' : 'json')
+const KEYS = Object.keys(PAGES) as PageKey[]
+const pageFor = (url = '/'): PageKey => KEYS.find((k) => PAGES[k].path !== '/' && url.startsWith(PAGES[k].path)) ?? 'json'
 
 /** Pre-renders one HTML file per route with its own <head> (title, description, canonical, JSON-LD). */
 function seo(): Plugin[] {
@@ -25,8 +26,11 @@ function seo(): Plugin[] {
         const index = bundle['index.html']
         if (!index || index.type !== 'asset') return
         const template = String(index.source)
-        index.source = fill(template, 'json')
-        this.emitFile({ type: 'asset', fileName: 'xml-diff/index.html', source: fill(template, 'xml') })
+        for (const key of KEYS) {
+          const path = PAGES[key].path
+          if (path === '/') index.source = fill(template, key)
+          else this.emitFile({ type: 'asset', fileName: `${path.slice(1)}/index.html`, source: fill(template, key) })
+        }
         this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: renderSitemap() })
         this.emitFile({ type: 'asset', fileName: 'robots.txt', source: renderRobots() })
       },

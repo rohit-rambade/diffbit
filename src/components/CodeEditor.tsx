@@ -1,6 +1,6 @@
 import { memo, useMemo, useRef, useState } from 'react'
 import { AlignLeft, Check, Copy, FileUp, Minimize2, X } from 'lucide-react'
-import { tokenize } from '@/lib/highlight'
+import { LANGS, tokenize } from '@/lib/langs'
 import type { Lang, ValidationError } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Tokens } from './Tokens'
@@ -34,6 +34,7 @@ export function CodeEditor({ lang, label, value, onChange, error, onFormat, onMi
   }, [value])
   const numbers = useMemo(() => Array.from({ length: lineCount }, (_, i) => i + 1).join('\n'), [lineCount])
   const highlight = value.length <= HIGHLIGHT_LIMIT
+  const info = LANGS[lang]
 
   const syncScroll = () => {
     const ta = taRef.current
@@ -75,13 +76,13 @@ export function CodeEditor({ lang, label, value, onChange, error, onFormat, onMi
     }
   }
 
-  const status = !value.trim() ? null : error ? (
+  const status = !value.trim() || !info.validates ? null : error ? (
     <button onClick={() => jumpTo(error.line, error.col)} className="truncate text-left text-[var(--del-text)] hover:underline" title={error.message}>
       Ln {error.line}, Col {error.col} · {error.message}
     </button>
   ) : (
     <span className="flex items-center gap-1 text-[var(--add-text)]">
-      <Check size={12} /> Valid {lang.toUpperCase()}
+      <Check size={12} /> Valid {info.label}
     </span>
   )
 
@@ -90,13 +91,17 @@ export function CodeEditor({ lang, label, value, onChange, error, onFormat, onMi
       <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-borderx pl-3.5 pr-1.5">
         <span className="text-xs font-medium text-textx">{label}</span>
         <div className="flex items-center">
-          <ToolButton onClick={onFormat} title="Beautify (Shift+Alt+F)">
-            <AlignLeft size={13} />
-            <span className="hidden sm:inline">Format</span>
-          </ToolButton>
-          <ToolButton onClick={onMinify} title="Minify">
-            <Minimize2 size={13} />
-          </ToolButton>
+          {info.formats && (
+            <ToolButton onClick={onFormat} title="Beautify (Shift+Alt+F)">
+              <AlignLeft size={13} />
+              <span className="hidden sm:inline">Format</span>
+            </ToolButton>
+          )}
+          {info.minifies && (
+            <ToolButton onClick={onMinify} title="Minify">
+              <Minimize2 size={13} />
+            </ToolButton>
+          )}
           <ToolButton onClick={copy} title="Copy">
             <Copy size={13} />
           </ToolButton>
@@ -152,7 +157,7 @@ export function CodeEditor({ lang, label, value, onChange, error, onFormat, onMi
             if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey) {
               e.preventDefault()
               document.execCommand('insertText', false, '  ')
-            } else if (e.shiftKey && e.altKey && (e.key === 'F' || e.key === 'f' || e.code === 'KeyF')) {
+            } else if (info.formats && e.shiftKey && e.altKey && (e.key === 'F' || e.key === 'f' || e.code === 'KeyF')) {
               e.preventDefault()
               onFormat()
             }
@@ -161,8 +166,8 @@ export function CodeEditor({ lang, label, value, onChange, error, onFormat, onMi
           autoCapitalize="off"
           autoComplete="off"
           autoCorrect="off"
-          aria-label={`${label} ${lang.toUpperCase()}`}
-          placeholder={`Paste or drop ${lang.toUpperCase()} here…`}
+          aria-label={`${label} ${info.label}`}
+          placeholder={`Paste or drop ${lang === 'text' ? 'text' : info.label} here…`}
           className={cn(
             'editor-text absolute inset-y-0 left-11 right-0 h-full w-[calc(100%-2.75rem)] resize-none overflow-auto border-0 bg-transparent outline-none placeholder:font-sans placeholder:text-mutedx2',
             highlight ? 'text-transparent caret-[var(--text)] selection:bg-[var(--sel)]' : 'text-textx',
@@ -180,7 +185,7 @@ export function CodeEditor({ lang, label, value, onChange, error, onFormat, onMi
         ref={fileRef}
         type="file"
         hidden
-        accept={lang === 'json' ? '.json,application/json,text/plain' : '.xml,.xsd,.xsl,.svg,.config,text/xml,application/xml,text/plain'}
+        accept={info.accept || undefined}
         onChange={(e) => {
           readFile(e.target.files?.[0])
           e.currentTarget.value = ''
